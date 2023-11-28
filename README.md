@@ -41,7 +41,8 @@ way to split the network into two groups to maximize the number of cut edges.
 
 To run the demo, type:
 ```bash
-python maximum_cut.py
+pip install streamlit
+streamlit run maximum_cut.py
 ```
 
 After running, output will be printed to the command line that provides a list
