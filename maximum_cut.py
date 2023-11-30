@@ -110,12 +110,12 @@ app.layout = html.Div(style=styles['container'], children=[
     dcc.Markdown("Network Modeling, Identifying Key Nodes, Maximizing Impact, Operational Efficiency, Dynamic Adaptation", style={'textAlign': 'left', 'color': '#FFFFFF'}),
    
     html.Div(style=styles['input-container'], children=[
-        dcc.Input(id='num-nodes', type='number', min=10, max=200, value=20, step=1, style=styles['input']),
+        dcc.Input(id='num-nodes', type='number', min=10, max=200, value=10, step=1, style=styles['input']),  # Default value set to 10
         html.Button('Generate with Edges', id='generate-with-edges-button', style=styles['button']),
         html.Button('Generate without Edges', id='generate-without-edges-button', style=styles['button']),
     ]),
     
-    html.Span(id='timer-output', style=styles['timer']),  # Timer display with styling
+    html.Span(id='timer-output', style=styles['timer']),
     dcc.Graph(id='network-graph', style=styles['graph-container'])
 ])
 
