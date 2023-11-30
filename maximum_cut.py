@@ -3,7 +3,7 @@
 # ------ Import necessary packages ----
 
 # pip install dash dash-cytoscape
-
+# pip install orjson
 # pip install plotly
 
 # streamlit run maximum_cut.py
@@ -86,9 +86,9 @@ styles = {
         'border-radius': '5px'
     },
     'graph-container': {
-        'height': '1000px',
+        'height': '1200px',
         'width': '1200px',
-        'margin-top': '5px'
+        'margin-top': '1px'
     },
         'input-container': {
         'margin': '10px 0',  # Add margin to top and bottom
@@ -106,16 +106,22 @@ styles = {
 # Define the layout of the app
 app.layout = html.Div(style=styles['container'], children=[
     html.H1('Maximum Cut Problem on a Network', style=styles['title']),
-    dcc.Markdown("The Maximum Cut Problem, in this context finds the most effective way to disrupt or weaken the network.", style={'textAlign': 'left', 'color': '#FFFFFF'}),
+    dcc.Markdown("The Maximum Cut Problem, in this context finds the most effective way to disrupt or weaken the network in combination with Most Cross-Set Edges", style={'textAlign': 'left', 'color': '#FFFFFF'}),
     dcc.Markdown("Network Modeling, Identifying Key Nodes, Maximizing Impact, Operational Efficiency, Dynamic Adaptation", style={'textAlign': 'left', 'color': '#FFFFFF'}),
    
     html.Div(style=styles['input-container'], children=[
-        dcc.Input(id='num-nodes', type='number', min=10, max=200, value=20, step=1, style=styles['input']),
+        dcc.Input(id='num-nodes', type='number', min=10, max=250, value=20, step=1, style=styles['input']),  # Default value set to 10
         html.Button('Generate with Edges', id='generate-with-edges-button', style=styles['button']),
         html.Button('Generate without Edges', id='generate-without-edges-button', style=styles['button']),
     ]),
+    dcc.Interval(
+        id='interval-component',
+        interval=1*1000,  # in milliseconds
+        n_intervals=0,
+        max_intervals=1  # Only trigger once
+    ),
     
-    html.Span(id='timer-output', style=styles['timer']),  # Timer display with styling
+    html.Span(id='timer-output', style=styles['timer']),
     dcc.Graph(id='network-graph', style=styles['graph-container'])
 ])
 
@@ -125,17 +131,17 @@ app.layout = html.Div(style=styles['container'], children=[
     Output('timer-output', 'children'),
     Input('generate-with-edges-button', 'n_clicks'),
     Input('generate-without-edges-button', 'n_clicks'),
+    Input('interval-component', 'n_intervals'),
     State('num-nodes', 'value')
 )
-
-def update_graph(with_edges_clicks, without_edges_clicks, num_nodes):
+def update_graph(with_edges_clicks, without_edges_clicks, n_intervals, num_nodes):
     ctx = dash.callback_context
     button_id = ctx.triggered[0]['prop_id'].split('.')[0] if ctx.triggered else None
 
-    if button_id in ['generate-with-edges-button', 'generate-without-edges-button']:
+    if button_id in ['generate-with-edges-button', 'generate-without-edges-button'] or n_intervals == 1:
         start_time = time.time()
 
-        edges_visible = (button_id == 'generate-with-edges-button')
+        edges_visible = (button_id != 'generate-without-edges-button')
         fig = regenerate_graph(num_nodes, edges_visible)
 
         elapsed_time = time.time() - start_time
