@@ -9,13 +9,14 @@
 # streamlit run maximum_cut.py
 
 import dash
-from dash import html, dcc, callback, Input, Output
+from dash import html, dcc, callback, Input, Output, State
 import plotly.graph_objects as go
 import networkx as nx
 from collections import defaultdict
 from dwave.system.samplers import DWaveSampler
 from dwave.system.composites import EmbeddingComposite
 import random
+import time
 
 
 # ------- Set up our graph -------
@@ -88,32 +89,61 @@ styles = {
         'height': '1000px',
         'width': '1200px',
         'margin-top': '5px'
+    },
+        'input-container': {
+        'margin': '10px 0',  # Add margin to top and bottom
+        'display': 'flex',
+        'justify-content': 'space-evenly',  # Evenly space items
+        'align-items': 'center'
+    },
+    'timer': {
+        'textAlign': 'center',
+        'color': '#FFFFFF',
+        'marginTop': '10px'  # Add margin to the top of the timer
     }
 }
 
 # Define the layout of the app
 app.layout = html.Div(style=styles['container'], children=[
-    html.H1('Maximum Cut Problem on a Random Network', style=styles['title']),
-    dcc.Markdown("**The Maximum Cut Problem, in the context of disrupting enemy communication networks as a part of electronic or cyber warfare, involves strategically targeting certain nodes (like servers, communication hubs, or relay stations) to maximally disrupt the network's functionality**", style={'textAlign': 'center', 'color': '#FFFFFF'}),
-    dcc.Markdown("Network Modeling, Identifying Key Nodes, Maximizing Impact, Operational Efficiency, Dynamic Adaptation", style={'textAlign': 'center', 'color': '#FFFFFF'}),
-    html.Div([
+    html.H1('Maximum Cut Problem on a Network', style=styles['title']),
+    dcc.Markdown("The Maximum Cut Problem, in this context finds the most effective way to disrupt or weaken the network.", style={'textAlign': 'left', 'color': '#FFFFFF'}),
+    dcc.Markdown("Network Modeling, Identifying Key Nodes, Maximizing Impact, Operational Efficiency, Dynamic Adaptation", style={'textAlign': 'left', 'color': '#FFFFFF'}),
+   
+    html.Div(style=styles['input-container'], children=[
         dcc.Input(id='num-nodes', type='number', min=10, max=200, value=20, step=1, style=styles['input']),
-        html.Button('Generate Random Network', id='generate-button', style=styles['button'])
-    ], style={'textAlign': 'center'}),
+        html.Button('Generate with Edges', id='generate-with-edges-button', style=styles['button']),
+        html.Button('Generate without Edges', id='generate-without-edges-button', style=styles['button']),
+    ]),
+    
+    html.Span(id='timer-output', style=styles['timer']),  # Timer display with styling
     dcc.Graph(id='network-graph', style=styles['graph-container'])
 ])
 
 # Callback to update the network graph
 @app.callback(
     Output('network-graph', 'figure'),
-    [Input('generate-button', 'n_clicks')],
-    [dash.dependencies.State('num-nodes', 'value')],
+    Output('timer-output', 'children'),
+    Input('generate-with-edges-button', 'n_clicks'),
+    Input('generate-without-edges-button', 'n_clicks'),
+    State('num-nodes', 'value')
 )
 
-def update_graph(n_clicks, num_nodes):
-    if n_clicks is None or num_nodes is None or num_nodes < 1:
-        # Prevent update before the button is clicked for the first time
-        return go.Figure()
+def update_graph(with_edges_clicks, without_edges_clicks, num_nodes):
+    ctx = dash.callback_context
+    button_id = ctx.triggered[0]['prop_id'].split('.')[0] if ctx.triggered else None
+
+    if button_id in ['generate-with-edges-button', 'generate-without-edges-button']:
+        start_time = time.time()
+
+        edges_visible = (button_id == 'generate-with-edges-button')
+        fig = regenerate_graph(num_nodes, edges_visible)
+
+        elapsed_time = time.time() - start_time
+        time_output = f"Graph generated in {elapsed_time:.2f} seconds"
+        return fig, time_output
+
+    return go.Figure(), ""
+
 
     # Generate the random network
     network_edges = generate_random_network(num_nodes)
@@ -139,11 +169,16 @@ def update_graph(n_clicks, num_nodes):
     numruns = 10
 
     # Run the QUBO on the solver from your config file
+    # Start the timer
+    start_time = time.time()
+
     sampler = EmbeddingComposite(DWaveSampler())
     response = sampler.sample_qubo(Q,
                                 chain_strength=chainstrength,
                                 num_reads=numruns,
                                 label='Example - Maximum Cut')
+    elapsed_time = time.time() - start_time
+    time_output = f"Execution Time: {elapsed_time:.2f} seconds"
 
     # ------- Print results to user -------
     print('-' * 60)
@@ -180,20 +215,20 @@ def update_graph(n_clicks, num_nodes):
         line=dict(color='darkblue', width=2)
     )
 
-    for edge in G.edges():
-        x0, y0, z0 = pos[edge[0]]
-        x1, y1, z1 = pos[edge[1]]
-        # Assign edge color based on the set of the first node
-        if edge[0] in S0:
-            edge_trace_red['x'] += (x0, x1, None)
-            edge_trace_red['y'] += (y0, y1, None)
-            edge_trace_red['z'] += (z0, z1, None)
-        else:
-            edge_trace_blue['x'] += (x0, x1, None)
-            edge_trace_blue['y'] += (y0, y1, None)
-            edge_trace_blue['z'] += (z0, z1, None)
+    # Only add edges if they are set to be visible
+    if edges_visible:
+        for edge in G.edges():
+            x0, y0, z0 = pos[edge[0]]
+            x1, y1, z1 = pos[edge[1]]
+            if edge[0] in S0:
+                edge_trace_red['x'] += (x0, x1, None)
+                edge_trace_red['y'] += (y0, y1, None)
+                edge_trace_red['z'] += (z0, z1, None)
+            else:
+                edge_trace_blue['x'] += (x0, x1, None)
+                edge_trace_blue['y'] += (y0, y1, None)
+                edge_trace_blue['z'] += (z0, z1, None)
 
-    node_x, node_y, node_z, node_color = [], [], [], []
     for node in G.nodes():
         x, y, z = pos[node]
         node_x.append(x)
@@ -208,6 +243,7 @@ def update_graph(n_clicks, num_nodes):
     )
 
     fig = go.Figure(data=[edge_trace_red, edge_trace_blue, node_trace])
+
 
     # Update layout for dark mode and remove gridlines
     fig.update_layout(
@@ -224,6 +260,82 @@ def update_graph(n_clicks, num_nodes):
         ),
         scene_aspectmode='cube'
     )
+
+    return fig, time_output, edges_visible
+
+def regenerate_graph(num_nodes, edges_visible):
+    if num_nodes is None or num_nodes < 1:
+        return go.Figure()
+
+    # Generate the random network
+    network_edges = generate_random_network(num_nodes)
+
+    # Create empty graph
+    G = nx.Graph()
+    G.add_edges_from(network_edges)
+
+    # Initialize Q matrix and other variables for QUBO
+    Q = defaultdict(int)
+    for i, j in G.edges:
+        Q[(i, i)] += -1
+        Q[(j, j)] += -1
+        Q[(i, j)] += 2
+
+    # Run the QUBO on the solver
+    sampler = EmbeddingComposite(DWaveSampler())
+    response = sampler.sample_qubo(Q, chain_strength=8, num_reads=10)
+    
+    # Interpret best result in terms of nodes and edges
+    lut = response.first.sample
+    S0 = [node for node in G.nodes if not lut[node]]
+    S1 = [node for node in G.nodes if lut[node]]
+
+    # Generate 3D positions for each node using a 3D layout
+    pos = nx.spring_layout(G, dim=3, seed=42)
+
+    # Create Plotly 3D scatter plot for the nodes
+    node_x, node_y, node_z, node_color = [], [], [], []
+    for node in G.nodes():
+        x, y, z = pos[node]
+        node_x.append(x)
+        node_y.append(y)
+        node_z.append(z)
+        node_color.append('red' if node in S0 else 'blue')
+
+    node_trace = go.Scatter3d(x=node_x, y=node_y, z=node_z, 
+                              mode='markers', 
+                              marker=dict(size=5, color=node_color))
+
+    fig = go.Figure(data=[node_trace])
+
+    # Add edges if they are set to be visible
+    if edges_visible:
+        edge_trace_red = go.Scatter3d(x=[], y=[], z=[], mode='lines', line=dict(color='darkred', width=2))
+        edge_trace_blue = go.Scatter3d(x=[], y=[], z=[], mode='lines', line=dict(color='darkblue', width=2))
+
+        for edge in G.edges():
+            x0, y0, z0 = pos[edge[0]]
+            x1, y1, z1 = pos[edge[1]]
+            if edge[0] in S0:
+                edge_trace_red['x'] += (x0, x1, None)
+                edge_trace_red['y'] += (y0, y1, None)
+                edge_trace_red['z'] += (z0, z1, None)
+            else:
+                edge_trace_blue['x'] += (x0, x1, None)
+                edge_trace_blue['y'] += (y0, y1, None)
+                edge_trace_blue['z'] += (z0, z1, None)
+
+        fig.add_trace(edge_trace_red)
+        fig.add_trace(edge_trace_blue)
+
+    # Update layout for dark mode and remove gridlines
+    fig.update_layout(title='Maximum Cut Chart', paper_bgcolor='rgba(0,0,0,0)',  
+                      plot_bgcolor='rgba(0,0,0,0)',
+                      scene=dict(xaxis=dict(showbackground=False, showticklabels=False, showgrid=False, zeroline=False),
+                                 yaxis=dict(showbackground=False, showticklabels=False, showgrid=False, zeroline=False),
+                                 zaxis=dict(showbackground=False, showticklabels=False, showgrid=False, zeroline=False),
+                                 xaxis_title='', yaxis_title='', zaxis_title=''),
+                      scene_aspectmode='cube')
 
     return fig
 
