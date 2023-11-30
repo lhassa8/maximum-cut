@@ -145,124 +145,6 @@ def update_graph(with_edges_clicks, without_edges_clicks, num_nodes):
     return go.Figure(), ""
 
 
-    # Generate the random network
-    network_edges = generate_random_network(num_nodes)
-
-    # Create empty graph
-    G = nx.Graph()
-    G.add_edges_from(network_edges)
-
-# ------- Set up our QUBO dictionary -------
-
-    # Initialize our Q matrix
-    Q = defaultdict(int)
-
-    # Update Q matrix for every edge in the graph
-    for i, j in G.edges:
-        Q[(i,i)]+= -1
-        Q[(j,j)]+= -1
-        Q[(i,j)]+= 2
-
-    # ------- Run our QUBO on the QPU -------
-    # Set up QPU parameters
-    chainstrength = 8
-    numruns = 10
-
-    # Run the QUBO on the solver from your config file
-    # Start the timer
-    start_time = time.time()
-
-    sampler = EmbeddingComposite(DWaveSampler())
-    response = sampler.sample_qubo(Q,
-                                chain_strength=chainstrength,
-                                num_reads=numruns,
-                                label='Example - Maximum Cut')
-    elapsed_time = time.time() - start_time
-    time_output = f"Execution Time: {elapsed_time:.2f} seconds"
-
-    # ------- Print results to user -------
-    print('-' * 60)
-    print('{:>15s}{:>15s}{:^15s}{:^15s}'.format('Set 0','Set 1','Energy','Cut Size'))
-    print('-' * 60)
-    for sample, E in response.data(fields=['sample','energy']):
-        S0 = [k for k,v in sample.items() if v == 0]
-        S1 = [k for k,v in sample.items() if v == 1]
-        print('{:>15s}{:>15s}{:^15s}{:^15s}'.format(str(S0),str(S1),str(E),str(int(-1*E))))
-
-
- # -- UI -- 
-
-    # Interpret best result in terms of nodes and edges
-    lut = response.first.sample
-    S0 = [node for node in G.nodes if not lut[node]]
-    S1 = [node for node in G.nodes if lut[node]]
-
-    # Generate 3D positions for each node using a 3D layout
-    pos = nx.spring_layout(G, dim=3, seed=42)
-
-    # Create Plotly 3D scatter plot for the nodes
-    node_x, node_y, node_z, node_color = [], [], [], []
-
-    # Create edge traces with specific colors for each set
-    edge_trace_red = go.Scatter3d(
-        x=[], y=[], z=[], 
-        mode='lines', 
-        line=dict(color='darkred', width=2)
-    )
-    edge_trace_blue = go.Scatter3d(
-        x=[], y=[], z=[], 
-        mode='lines', 
-        line=dict(color='darkblue', width=2)
-    )
-
-    # Only add edges if they are set to be visible
-    if edges_visible:
-        for edge in G.edges():
-            x0, y0, z0 = pos[edge[0]]
-            x1, y1, z1 = pos[edge[1]]
-            if edge[0] in S0:
-                edge_trace_red['x'] += (x0, x1, None)
-                edge_trace_red['y'] += (y0, y1, None)
-                edge_trace_red['z'] += (z0, z1, None)
-            else:
-                edge_trace_blue['x'] += (x0, x1, None)
-                edge_trace_blue['y'] += (y0, y1, None)
-                edge_trace_blue['z'] += (z0, z1, None)
-
-    for node in G.nodes():
-        x, y, z = pos[node]
-        node_x.append(x)
-        node_y.append(y)
-        node_z.append(z)
-        node_color.append('red' if node in S0 else 'blue')
-
-    node_trace = go.Scatter3d(
-        x=node_x, y=node_y, z=node_z, 
-        mode='markers', 
-        marker=dict(size=5, color=node_color)
-    )
-
-    fig = go.Figure(data=[edge_trace_red, edge_trace_blue, node_trace])
-
-
-    # Update layout for dark mode and remove gridlines
-    fig.update_layout(
-        title='Maximum Cut Chart',
-        paper_bgcolor='rgba(0,0,0,0)',  
-        plot_bgcolor='rgba(0,0,0,0)',
-        scene=dict(
-            xaxis=dict(showbackground=False, showticklabels=False, showgrid=False, zeroline=False),  # Hide axis background, ticks, gridlines
-            yaxis=dict(showbackground=False, showticklabels=False, showgrid=False, zeroline=False),
-            zaxis=dict(showbackground=False, showticklabels=False, showgrid=False, zeroline=False),
-            xaxis_title='',
-            yaxis_title='',
-            zaxis_title=''
-        ),
-        scene_aspectmode='cube'
-    )
-
-    return fig, time_output, edges_visible
-
 def regenerate_graph(num_nodes, edges_visible):
     if num_nodes is None or num_nodes < 1:
         return go.Figure()
@@ -287,24 +169,40 @@ def regenerate_graph(num_nodes, edges_visible):
     
     # Interpret best result in terms of nodes and edges
     lut = response.first.sample
-    S0 = [node for node in G.nodes if not lut[node]]
-    S1 = [node for node in G.nodes if lut[node]]
+    S0 = {node for node in G.nodes if not lut[node]}
+    S1 = {node for node in G.nodes if lut[node]}
+
+    # Count cross-set edges for each node
+    cross_set_edges_count = {}
+    for node in G.nodes:
+        cross_set_edges_count[node] = sum(1 for neighbor in G[node] if (neighbor in S1 if node in S0 else neighbor in S0))
+
+    # Identify top 3 nodes with most cross-set edges
+    top_3_nodes = sorted(cross_set_edges_count, key=cross_set_edges_count.get, reverse=True)[:3]
+
 
     # Generate 3D positions for each node using a 3D layout
     pos = nx.spring_layout(G, dim=3, seed=42)
 
     # Create Plotly 3D scatter plot for the nodes
-    node_x, node_y, node_z, node_color = [], [], [], []
+    node_x, node_y, node_z, node_color, node_size = [], [], [], [], []
     for node in G.nodes():
         x, y, z = pos[node]
         node_x.append(x)
         node_y.append(y)
         node_z.append(z)
         node_color.append('red' if node in S0 else 'blue')
+        node_size.append(15 if node in top_3_nodes else 7)  # Larger size for top 3 nodes
 
-    node_trace = go.Scatter3d(x=node_x, y=node_y, z=node_z, 
-                              mode='markers', 
-                              marker=dict(size=5, color=node_color))
+    node_trace = go.Scatter3d(
+        x=node_x, y=node_y, z=node_z, 
+        mode='markers', 
+        marker=dict(
+            size=node_size, 
+            color=node_color,
+            line=dict(width=0)  # Set line width to 0 to remove the border
+        )
+    )
 
     fig = go.Figure(data=[node_trace])
 
@@ -338,6 +236,8 @@ def regenerate_graph(num_nodes, edges_visible):
                       scene_aspectmode='cube')
 
     return fig
+
+
 
 
 # Run the app
