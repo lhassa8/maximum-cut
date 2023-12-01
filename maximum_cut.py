@@ -6,7 +6,9 @@
 # pip install orjson
 # pip install plotly
 
-# streamlit run maximum_cut.py
+# initial
+# pip install dwave-ocean-sdk && dwave setup
+
 
 import dash
 from dash import html, dcc, callback, Input, Output, State
@@ -198,7 +200,7 @@ def regenerate_graph(num_nodes, edges_visible):
         node_y.append(y)
         node_z.append(z)
         node_color.append('red' if node in S0 else 'blue')
-        node_size.append(15 if node in top_3_nodes else 7)  # Larger size for top 3 nodes
+        node_size.append(20 if node in top_3_nodes else 7)  # Larger size for top 3 nodes
 
     node_trace = go.Scatter3d(
         x=node_x, y=node_y, z=node_z, 
