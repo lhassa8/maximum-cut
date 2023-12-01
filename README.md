@@ -41,9 +41,18 @@ way to split the network into two groups to maximize the number of cut edges.
 
 To run the demo, type:
 ```bash
-pip install streamlit
-streamlit run maximum_cut.py
+pip install dash dash-cytoscape
+pip install orjson
+pip install plotly
+python maximum_cut.py
 ```
+
+For reference:
+
+200 nodes has 803469022129495137770981046170581301261101496891396417650688 possible combinations!
+That's 803 quindecillion, or 8.03 x 10^59
+ 
+2^299 (300 nodes) is approximately 6.3 nonillion combinations, or 1.02×10^90.  There are around 10^80 atoms in the universe.
 
 After running, output will be printed to the command line that provides a list
 of nodes in each set (labeled sets S0 and S1), the energy corresponding to the
